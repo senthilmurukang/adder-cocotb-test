@@ -1,21 +1,12 @@
 // Adder DUT
 `timescale 1ns/1ps
 
-module adder #(
-    parameter integer DATA_WIDTH = 4
-  ) (
-    input  logic unsigned [DATA_WIDTH-1:0] A,
-    input  logic unsigned [DATA_WIDTH-1:0] B,
-    output logic unsigned [DATA_WIDTH:0]   X
+module adder(
+    input logic [3:0] A,
+    input logic [3:0] B,
+    output logic [3:0] sum,
+    output logic carry
   );
-
-  assign X = A + B;
-
-  // Dump waves
-  initial
-  begin
-    $dumpfile("dump.vcd");
-    $dumpvars(1, adder);
-  end
-
+  assign sum = A + B;
+  assign carry = (A[3] & B[3]) | (A[3] & ~sum[3]) | (B[3] & ~sum[3]);
 endmodule
