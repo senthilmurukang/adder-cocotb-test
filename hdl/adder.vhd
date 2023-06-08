@@ -10,7 +10,7 @@ entity adder is
         );
 end entity adder;
 
-architecture Behavioral of adder is
+architecture rtl of adder is
 begin
     process(A, B)
         variable temp_sum   : unsigned(3 downto 0);
@@ -27,4 +27,4 @@ begin
         carry <= temp_carry;
         
     end process;
-end architecture Behavioral;
+end architecture rtl;
