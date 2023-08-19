@@ -1,4 +1,4 @@
-SIM := /usr/local/bin/verilator
+SIM := /usr/local/share/verilator
 
 TOPLEVEL_LANG := verilog
 
