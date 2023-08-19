@@ -1,0 +1,16 @@
+name: cocotb test
+run-name: ${{ github.actor }} is running on GitHub Actions 🚀
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+jobs:
+  build:
+    runs-on: [self-hosted, linux, ARM64]
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v3
+      - name: Run the cocotb test cases
+        run: make
+        working-directory: tests
