@@ -1,0 +1,125 @@
+# Makefile for VCS compilation and simulation
+
+include $(shell cocotb-config --makefiles)/Makefile.inc
+
+# Location of the VCS binaries
+VCS_BIN_DIR := $(VCS_HOME)/bin
+
+# Simulator/compiler binary to use
+CMD_BIN := vcs
+
+# Generate simulator/compiler command
+ifdef VCS_BIN_DIR
+    CMD := $(shell :; command -v $(VCS_BIN_DIR)/$(CMD_BIN) 2>/dev/null)
+else
+    # auto-detect bin dir from system path
+    CMD := $(shell :; command -v $(CMD_BIN) 2>/dev/null)
+endif
+
+# Passes the GUI command line argument to the simulator binary
+ifeq ($(GUI),1)
+    EXTRA_ARGS += -gui
+endif
+
+SIM_ARGS := ""
+ifeq ($(WAVES),1)
+	SIM_ARGS += +fsdb+all=on -ucli -do ucli.do
+endif
+
+# Indicates the toplevel module language
+TOPLEVEL_LANG ?= verilog
+
+# Get the current working directory
+PWD?=$(shell pwd)
+
+# Build folder
+SIM_BUILD := $(PWD)/sim_build
+
+# Add python model to path
+export PYTHONPATH := $(PWD)/../model:$(PYTHONPATH)
+
+# Simulation time units
+COCOTB_HDL_TIMEUNIT = 1ns
+COCOTB_HDL_TIMEPRECISION = 1ps
+
+# TOPLEVEL - the Verilog/VHDL top level module to be tested
+TOPLEVEL := adder
+
+# MODULE - the Cocotb Python test file with the testcases
+MODULE   ?= test_adder
+
+# Set build constants
+SOURCE_ROOT_DIR := $(PWD)/..
+
+# VCS compiler options for Verilog/SystemVerilog
+CARGS := -assert svaext -sverilog -timescale=1ns/1ps -kdb -full64 -nc +define+COCOTB_SIM=1 +define+VIRAGE_FAST_VERILOG=1 +define+MEM_CHECK_OFF=1
+
+# VCS compiler options for VHDL
+CARGS_VHDL := -nc -l +v2k -xlrm -kdb -full64
+
+COVERAGE_ARGS := -cm line+cond+fsm+tgl+branch -preserve_path -cm_name $(MODULE)_$(TESTCASE)
+
+# Compiler options
+VCS_OPTIONS := -nc -kdb -full64 -debug_access+all +lint=TFIPC-L +lint=PCWM  
+#VCS_OPTIONS := -nc -kdb -full64 -debug_access+all +lint=TFIPC-L +lint=PCWM  +vcs+initreg+random
+#VCS_OPTIONS += -lca -cm line+cond+fsm+tgl+path $(TOPLEVEL)
+ifeq ($(VCSCOVERAGE),1)
+	VCS_OPTIONS += $(COVERAGE_ARGS)
+# -cm_dir $(VCSCOVERAGE_DIR)coverage/$(MODULE)_$(TESTCASE).vdb
+endif
+
+# VHDL source files
+VHDL_SOURCES := $(SOURCE_ROOT_DIR)/hdl/adder.vhd
+
+# Verilog source files
+VERILOG_SOURCES := $(SOURCE_ROOT_DIR)/hdl/adder.v
+
+# SystemVerilog source files
+SYSTEM_VERILOG_SOURCES := $(SOURCE_ROOT_DIR)/hdl/adder.sv
+
+# Executable name
+TARGET = simv
+
+# Simulator arguments
+ifeq ($(VCSCOVERAGE),1)
+	SIM_ARGS += $(COVERAGE_ARGS)
+#-preserve_path -cm_dir $(COVERAGE_DIR)coverage/$(MODULE)_$(TESTCASE).vdb
+endif
+#SIM_ARGS += +vcs+vcdpluson +vcs+dumpfile+filename=verilog.dump +vcs+dumpvars 
+SIM_ARGS += +vcs+initreg+random
+
+# Can't do this using an argument, we have to create a PLI table file
+# enabling write access to the design
+$(SIM_BUILD)/pli.tab : | $(SIM_BUILD)
+	echo "acc+=rw,wn:*" > $@
+
+# Add Unisim precompiled library for compilation of SUGOI Manager Core
+$(SIM_BUILD)/synopsys_sim.setup :
+	echo -e "--VCS MX setup file for ASIC\r\n--Library Mapping\r\nunisim : /local/tools/Xilinx/Vivado/2022.2/vcs-S-2021.09/unisim/64\r\n" > $@
+
+# Compilation phase
+$(SIM_BUILD)/simv: $(VHDL_SOURCES) $(VERILOG_SOURCES) $(SYSTEM_VERILOG_SOURCES) $(SIM_BUILD)/pli.tab $(SIM_BUILD)/synopsys_sim.setup | $(SIM_BUILD)
+	cd $(SIM_BUILD) && \
+    # vhdlan $(CARGS_VHDL) $(VHDL_SOURCES) && \
+	vlogan -nc -kdb $(VERILOG_SOURCES) && \
+	# vlogan $(CARGS) $(SYSTEM_VERILOG_SOURCES) && \
+	TOPLEVEL=$(TOPLEVEL) \
+	$(CMD) -top $(TOPLEVEL) +vcs+initreg+random +vpi -P pli.tab  $(VCS_OPTIONS) \
+	-timescale=$(COCOTB_HDL_TIMEUNIT)/$(COCOTB_HDL_TIMEPRECISION) -o $(TARGET) \
+	-load $(shell cocotb-config --lib-name-path vpi vcs)
+
+# Execution phase
+$(COCOTB_RESULTS_FILE): $(SIM_BUILD)/simv $(CUSTOM_SIM_DEPS)
+	$(RM) $(COCOTB_RESULTS_FILE)
+
+	MODULE=$(MODULE) TESTCASE=$(TESTCASE) TOPLEVEL=$(TOPLEVEL) TOPLEVEL_LANG=$(TOPLEVEL_LANG) \
+	$(SIM_CMD_PREFIX) $(SIM_BUILD)/simv +define+COCOTB_SIM=1 +define+VIRAGE_FAST_VERILOG=1 +define+MEM_CHECK_OFF=1 $(SIM_ARGS) $(EXTRA_ARGS)
+
+	$(call check_for_results_file)
+	mv sim_build/simv.vdb/ $(VCSCOVERAGE_DIR)coverage/$(MODULE)_$(TESTCASE).vdb/
+
+clean::
+	$(RM) -r $(SIM_BUILD)
+	$(RM) -r simv.daidir
+	$(RM) -r cm.log
+	$(RM) -r ucli.key
