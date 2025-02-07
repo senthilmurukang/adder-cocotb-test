@@ -27,7 +27,7 @@ ifeq ($(WAVES),1)
 endif
 
 # Indicates the toplevel module language
-TOPLEVEL_LANG ?= verilog
+TOPLEVEL_LANG ?= vhdl
 
 # Get the current working directory
 PWD?=$(shell pwd)
@@ -36,17 +36,17 @@ PWD?=$(shell pwd)
 SIM_BUILD := $(PWD)/sim_build
 
 # Add python model to path
-export PYTHONPATH := $(PWD)/../model:$(PYTHONPATH)
+# export PYTHONPATH := $(PWD)/../model:$(PYTHONPATH)
 
 # Simulation time units
 COCOTB_HDL_TIMEUNIT = 1ns
 COCOTB_HDL_TIMEPRECISION = 1ps
 
 # TOPLEVEL - the Verilog/VHDL top level module to be tested
-TOPLEVEL := adder
+TOPLEVEL := clock_divider
 
 # MODULE - the Cocotb Python test file with the testcases
-MODULE   ?= test_adder
+MODULE   ?= test_clock_divider
 
 # Set build constants
 SOURCE_ROOT_DIR := $(PWD)/..
@@ -70,12 +70,14 @@ endif
 
 # VHDL source files
 VHDL_SOURCES := $(SOURCE_ROOT_DIR)/hdl/adder.vhd
+VHDL_SOURCES += $(SOURCE_ROOT_DIR)/hdl/ClockDivider.vhd
 
 # Verilog source files
 VERILOG_SOURCES := $(SOURCE_ROOT_DIR)/hdl/adder.v
 
 # SystemVerilog source files
 SYSTEM_VERILOG_SOURCES := $(SOURCE_ROOT_DIR)/hdl/adder.sv
+SYSTEM_VERILOG_SOURCES += $(SOURCE_ROOT_DIR)/hdl/clock_divider.sv
 
 # Executable name
 TARGET = simv
@@ -100,9 +102,9 @@ $(SIM_BUILD)/synopsys_sim.setup :
 # Compilation phase
 $(SIM_BUILD)/simv: $(VHDL_SOURCES) $(VERILOG_SOURCES) $(SYSTEM_VERILOG_SOURCES) $(SIM_BUILD)/pli.tab $(SIM_BUILD)/synopsys_sim.setup | $(SIM_BUILD)
 	cd $(SIM_BUILD) && \
-    # vhdlan $(CARGS_VHDL) $(VHDL_SOURCES) && \
-	vlogan -nc -kdb $(VERILOG_SOURCES) && \
-	# vlogan $(CARGS) $(SYSTEM_VERILOG_SOURCES) && \
+    vhdlan $(CARGS_VHDL) $(VHDL_SOURCES) && \
+	# vlogan -nc -kdb $(VERILOG_SOURCES) && \
+	vlogan $(CARGS) $(SYSTEM_VERILOG_SOURCES) && \
 	TOPLEVEL=$(TOPLEVEL) \
 	$(CMD) -top $(TOPLEVEL) +vcs+initreg+random +vpi -P pli.tab  $(VCS_OPTIONS) \
 	-timescale=$(COCOTB_HDL_TIMEUNIT)/$(COCOTB_HDL_TIMEPRECISION) -o $(TARGET) \
